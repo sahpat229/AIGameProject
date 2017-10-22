@@ -26,6 +26,7 @@ class StateModel():
 		"""
 		self.mode = mode
 		self.color = color
+		self.reachedStates = []
 		if startPosDefault == 1:
 			#red is lower indices, yellow is higher indices
 			self.redMapper = {'identifier': 'red', (1, 0) : 0, (3, 0) : 0, (5, 0) : 0, (7, 0) : 0,
@@ -55,6 +56,11 @@ class StateModel():
 		else:
 			self.gameIsFinished = False
 
+		self.diag = set([(7, 0), (6, 1), (5, 2), (4, 3), (3, 4),
+			(2, 5), (1, 6), (0, 7)])
+		self.doublediag = set([(1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6),
+			(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7)])
+		self.doublecorner = set([(1, 0), (0, 1), (6, 7), (7, 6)])
 		self.timeLimit = timeLimit
 
 	def getLocation(self, location):
@@ -258,8 +264,14 @@ class StateModel():
 		while not self.gameIsFinished:
 			self.executeTurn()
 
-	def coordOnBottom(self, coord, currentTurn):
-		if currentTurn == 'red':
+		if self.currentTurn == 'red':
+			text = colored('yellow won', 'yellow')
+		else:
+			text = colored('red won', 'red')
+		print(text)
+
+	def coordOnBottom(self, coord, pieceColor):
+		if pieceColor == 'red':
 			if coord[1] == 0:
 				return True
 			else:
@@ -270,42 +282,63 @@ class StateModel():
 			else:
 				return False
 
+	def coordOnSide(self, coord):
+		return coord[0] == 0 or coord[1] == 7
+
+	def coordAttacking(self, coord, pieceColor):
+		if pieceColor == 'red':
+			if 5 <= coord[1] <= 7:
+				return True
+			else:
+				return False
+		else:
+			if 0 <= coord[1] <= 2:
+				return True
+			else:
+				return False
+
+	def computeFeatures(self, myMapper, otherMapper, currentTurn, currdepth):
+		if currentTurn == 'red':
+			redMapper = myMapper
+			yellowMapper = otherMapper
+		else:
+			redMapper = otherMapper
+			yellowMapper = myMapper
+
+		redFeatures = {'pawns': 0, 'kings': 0, 'safePawns': 0, 'safeKings': 0,
+			'moveablePawns': 0, 'moveableKings': 0, 'distanceToKing': 0, 'defenderPieces': 0,
+			'kingLine': 0, 'centerPieces': 0}
+		yellowFeatures = {'pawns': 0, 'kings': 0, 'safePawns': 0, 'safeKings': 0,
+			'moveablePawns': 0, 'moveableKings': 0, 'distanceToKing': 0, 'defenderPieces': 0,
+			'kingLine': 0, 'centerPieces': 0}
+
+		for coord, king in redMapper.items():
+			nonJumpMoves, jumpFound = self.getValidMovesForCoord(currentTurn,
+				coord, king, myMapper, otherMapper, jumpFound=False)
+			if king == 0:
+				redFeatures['pawns'] += 1
+				if coord[0] == 0 or coord[0] == 7:
+					redFeatures['safePawns'] += 1
+				if !jumpFound:
+					redFeatures['moveablePawns'] += 1
+				redFeatures['distanceToKing'] += 7 - coord[0]
+			else:
+				redFeatures['kings'] += 1
+				if coord[0] == 0 or coord[0] == 7:
+					redFeatures['safeKings'] += 1
+				if !jumpFound:
+					redFeatures['moveableKings'] += 1
+			if coord[1] == 0:
+				redFeatures['kingLine'] += 1
+			if 0 <= coord[1] <= 1:
+				redFeatures['defenderPieces'] += 1
+			if 2 <= coord[0] <= 5 and 2 <= coord[1] <= 5:
+				redFeatures['centerPieces'] += 1
+				
+
+
 	def evaluateBoard(self, myMapper, otherMapper, currentTurn, currdepth):
-		if len(myMapper) == 0:
-			return -sys.maxsize - 1 + currdepth
-		elif len(otherMapper) == 0:
-			return sys.maxsize - currdepth
 
-		myScore = 0
-		otherScore = 0
-		for coord, king in myMapper.items():
-			if type(coord) is str:
-				continue
-			if king == 0:
-				value = 3
-			else:
-				value = 5
-			if self.coordOnBottom(coord, currentTurn):
-				value += 1
-			myScore += value
-			otherScore -= value
-		for coord, king in otherMapper.items():
-			if type(coord)is str:
-				continue
-			if king == 0:
-				value = 3
-			else:
-				value = 5
-			if self.coordOnBottom(coord, currentTurn):
-				value += 1
-			myScore -= value
-			otherScore += value
-
-		multiplierAdd = int(len(myMapper) * 5 / len(otherMapper))
-		myScore += multiplierAdd
-		otherScore -= multiplierAdd
-		
-		return ((myScore - otherScore) << 8) + np.random.randint(low=0, high=5)
 
 	def findBestMove(self):
 		if self.currentTurn == 'red':
@@ -330,7 +363,7 @@ class StateModel():
 		except TimeoutException:
 			signal.setitimer(signal.ITIMER_VIRTUAL, 0)
 			if move != None:
-				#print("last move:", move)
+				print("Depth:", depthLimit - 1)
 				return move
 			else:
 				raise ValueError('Best move is None!')
@@ -348,6 +381,9 @@ class StateModel():
 		moves = self.getValidMoves(currentTurn, myMapper, otherMapper)
 		if len(moves) == 0:
 			return -sys.maxsize + 1 + currdepth, None
+		if len(otherMapper) == 0:
+			return sys.maxsize - currdepth, None
+
 		for move in moves:
 			# if currdepth == 1:
 			# 	print("V:", v, "Maxmove:", maxmove, "Move:", move, "Currturn:", currentTurn)
@@ -383,6 +419,9 @@ class StateModel():
 		moves = self.getValidMoves(currentTurn, myMapper, otherMapper)
 		if len(moves) == 0:
 			return sys.maxsize - currdepth, None
+		if len(otherMapper) == 0:
+			return -sys.maxsize + 1 + currdepth, None
+
 		for move in moves:
 			# if currdepth == 2:
 			# 	print("Minv:", v, "minmove:", minmove, "move:", move, "all moves:", moves)
@@ -440,6 +479,7 @@ class StateModel():
 		self.printBoard()
 		text = colored(self.currentTurn + "'s turn", self.currentTurn)
 		print(text)
+
 		if self.currentTurn == 'red':
 			myMapper = self.redMapper
 			otherMapper = self.yellowMapper
@@ -455,9 +495,34 @@ class StateModel():
 		if self.turnStyle[self.currentTurn] == 'player':
 			#player Turn
 			move = self.handlePlayerTurn()
+			if move == 'U':
+				try:
+					self.redMapper, self.yellowMapper, self.currentTurn = self.reachedStates.pop()
+				except Exception:
+					print("No moves to undo!")
+				return
+			elif move == 'UU':
+				try:
+					if not len(self.reachedStates) >= 2:
+						print("Not enough moves to undo")
+						return
+					self.reachedStates.pop()
+					self.redMapper, self.yellowMapper, self.currentTurn = self.reachedStates.pop()
+				except Exception:
+					print("No moves to undo!")
+				return
+			elif move == 'AI':
+				if len(self.validMoves) == 1:
+					ai_move = self.validMoves[0]
+				else:
+					ai_move = self.findBestMove()
+				print(ai_move)
+				return
+			self.reachedStates.append((dict(self.redMapper), dict(self.yellowMapper), self.currentTurn))
 			self.executeMove(self.currentTurn, move, myMapper, otherMapper)
 		else:
 			#computer Turn
+			self.reachedStates.append((dict(self.redMapper), dict(self.yellowMapper), self.currentTurn))
 			if len(self.validMoves) == 1:
 				move = self.validMoves[0]
 			else:
@@ -472,15 +537,24 @@ class StateModel():
 	def handlePlayerTurn(self):
 		while True:
 			try:
-				move = input("Enter a move like follows - A5->B6 - or enter in 'H' for a list of all possible moves: ")
+				move = input("Enter a move like follows - A5->B6 - or enter in 'H' for a" \
+					+ "list of all possible moves or 'U' for undoing your move once or 'UU' for twice:" \
+					+ "or AI for seeing what the AI would do in your spot: ")
 				if move == 'H':
 					print('\n'.join(self.validMoves))
+				elif move == 'U':
+					break
+				elif move == 'UU':
+					break
+				elif move == 'AI':
+					break
 				else:
 					if not move in self.validMoves:
 						raise ValueError("Please enter a valid, properly formatted move.")
 					break
 			except Exception:
 				print("Please enter a valid, properly formatted move.")
+		print("Returning move:", move)
 		return move
 
 while True:
