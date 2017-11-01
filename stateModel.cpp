@@ -384,7 +384,7 @@ void StateModel::startGame() {
             this->turnStyles[1] = "computer";
             this->turnStyles[0] = "computer";
     }
-    this->currentTurn = true;
+    this->currentTurn = false;
     while (!this->gameIsFinished) {
         this->executeTurn();
     }
@@ -758,6 +758,16 @@ pair<int, vector<Coord> *>StateModel::minValue(bool currentTurn, unordered_map<C
     return make_pair(v, returnMove);
 }
 
+int StateModel::computeManhattan(vector<Coord> &largerCoords, vector <Coord> &smallerCoords) {
+    int distance = 0;
+    for (Coord &coord : largerCoords) {
+        for (Coord &targetCoord : smallerCoords) {
+            distance += abs(coord.first - targetCoord.first) + abs(coord.second - targetCoord.second);
+        }
+    }
+    return distance;
+}
+
 int StateModel::evaluateBoard(bool currentTurn,
                               unordered_map<Coord, int, pair_hash> &myMapper,
                               unordered_map<Coord, int, pair_hash> &otherMapper,
@@ -777,6 +787,36 @@ int StateModel::evaluateBoard(bool currentTurn,
     int doubleCornerScore = 150;
     int kingLine = 250;
     int diagonalScore = 50;
+
+    int multiplierCoefficient = 150;
+
+    if (redMapper.size() + yellowMapper.size() < 7) {
+        pawnScore = 600;
+        kingScore = 1100;
+        centerScore = 200;
+        doubleCornerScore = 200;
+        kingLine = 0;
+        diagonalScore = 50;
+
+        multiplierCoefficient = 500;
+
+        vector<Coord> redCoords;
+        vector<Coord> yellowCoords;
+        for (pair<const Coord, int> &piece : redMapper) {
+            redCoords.push_back(piece.first);
+        }
+        for (pair<const Coord, int> &piece : yellowMapper) {
+            yellowCoords.push_back(piece.first);
+        }
+
+        if (redCoords.size() > yellowCoords.size()) {
+            int distance = this->computeManhattan(redCoords, yellowCoords);
+            redScore -= distance * 15;
+        } else if (yellowCoords.size() > redCoords.size()) {
+            int distance = this->computeManhattan(yellowCoords, redCoords);
+            yellowScore -= distance * 15;
+        }
+    }
 
     if (redMapper.size() + yellowMapper.size() < 4) {
         pawnScore = 600;
@@ -849,11 +889,11 @@ int StateModel::evaluateBoard(bool currentTurn,
     int myScore = currentTurn ? redScore : yellowScore;
     int otherScore = currentTurn ? yellowScore : redScore;
 
-    int multiplierAdd = myMapper.size() * 150 / otherMapper.size();
-    if (multiplierAdd > 150) {
+    int multiplierAdd = myMapper.size() * multiplierCoefficient / otherMapper.size();
+    if (multiplierAdd > multiplierCoefficient) {
         myScore += multiplierAdd;
         otherScore -= multiplierAdd;
-    } else if (multiplierAdd < 150) {
+    } else if (multiplierAdd < multiplierCoefficient) {
         myScore -= multiplierAdd;
         otherScore += multiplierAdd;
     }

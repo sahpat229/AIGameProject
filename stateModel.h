@@ -68,6 +68,7 @@ public:
                       int currdepth, bool fromMax);
     vector<Coord> *findBestMove();
     void displayMoveInline(vector<Coord> *move);
+    int computeManhattan(vector<Coord> &largerCoords, vector <Coord> &smallerCoords);
 
 private:
     int mode;
