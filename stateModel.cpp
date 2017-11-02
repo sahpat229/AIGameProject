@@ -790,6 +790,18 @@ int StateModel::evaluateBoard(bool currentTurn,
 
     int multiplierCoefficient = 150;
 
+    // for (pair<const Coord, int> &piece : redMapper) {
+    //     if (piece.second == 0) {
+    //         redScore += pawnScore;
+    //     } else redScore += kingScore;
+    // }
+
+    // for (pair<const Coord, int> &piece : yellowMapper) {
+    //     if (piece.second == 0) {
+    //         yellowScore += pawnScore;
+    //     } else yellowScore += kingScore;
+    // }
+
     if (redMapper.size() + yellowMapper.size() < 7) {
         pawnScore = 600;
         kingScore = 1100;
@@ -860,7 +872,7 @@ int StateModel::evaluateBoard(bool currentTurn,
         const Coord &coord = piece.first;
         if (piece.second == 0) {
             redScore += pawnScore;
-            redScore += (7 - coord.first) * distancePenalty;
+            redScore += (7 - coord.second) * distancePenalty;
         }
         else redScore += kingScore;
         if ((coord.first == 0) || (coord.first == 7)) redScore += safeScore;
@@ -875,13 +887,13 @@ int StateModel::evaluateBoard(bool currentTurn,
         const Coord &coord = piece.first;
         if (piece.second == 0) {
             yellowScore += pawnScore;
-            yellowScore += coord.first * distancePenalty;
+            yellowScore += coord.second * distancePenalty;
         }
         else yellowScore += kingScore;
         if ((coord.first == 0) || (coord.first == 7)) yellowScore += safeScore;
         if (this->doubleCorner.find(coord) != this->doubleCorner.end()) yellowScore += doubleCornerScore;
         if (this->doubleDiag.find(coord) != this->doubleDiag.end()) yellowScore += diagonalScore;
-        if (coord.second == 0) yellowScore += kingLine;
+        if (coord.second == 7) yellowScore += kingLine;
         if ((2 <= coord.first) && (coord.first <= 5) && (2 <= coord.second) && (coord.second <= 5))
             yellowScore += centerScore;
     }
@@ -900,6 +912,9 @@ int StateModel::evaluateBoard(bool currentTurn,
 
     if (fromMax) return ((myScore - otherScore) << 5) + (rand() % 8);
     else return ((otherScore - myScore) << 5) + (rand() % 8);
+
+    // if (fromMax) return (myScore - otherScore);
+    // else return (otherScore - myScore);
 }
 
 vector<Coord> *StateModel::findBestMove() {
