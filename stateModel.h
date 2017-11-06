@@ -51,7 +51,7 @@ public:
     unordered_map<Coord, int, pair_hash> *getMyMapper();
     unordered_map<Coord, int, pair_hash> *getOtherMapper();
     void printEmpty(bool background);
-    vector<Coord> *alphaBetaSearch(bool currentTurn, unordered_map<Coord, int, pair_hash> &myMapper,
+    pair<int, vector<Coord> *>alphaBetaSearch(bool currentTurn, unordered_map<Coord, int, pair_hash> &myMapper,
                                    unordered_map<Coord, int, pair_hash> &otherMapper,
                                    int depthLimit, bool debug, chrono::system_clock::time_point &endTime); 
     pair<int, vector<Coord> *>maxValue(bool currentTurn, unordered_map<Coord, int, pair_hash> &myMapper,

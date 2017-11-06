@@ -14,6 +14,7 @@
 #include <ctime>
 #include <chrono>
 #include <stdlib.h>
+#include <iomanip>
 
 #include "stateModel.h"
 
@@ -56,6 +57,7 @@ StateModel::StateModel(int mode, int color, int pos, vector<pair<string, int>> r
             this->yellowMapper[this->getLocation(tup.first)] = tup.second;
         }
     }
+
     this->timeLimit = timeLimit;
     this->diag = { {7, 0}, {6, 1}, {5, 2}, {4, 3}, {3, 4},
             {2, 5}, {1, 6}, {0, 7}
@@ -121,13 +123,13 @@ void StateModel::printBoard() {
             } else if (y_got != this->yellowMapper.end()) {
                 int king = this->yellowMapper[make_pair(x, y)];
                 if (king == 1) {
-                    cout << "\033["+color+";30;1m" + "  K  " + "\033[0m";
+                    cout << "\033["+color+";33;1m" + "  K  " + "\033[0m";
                 }
                 else {
-                    cout << "\033["+color+";30;1m" + "  O  " + "\033[0m";
+                    cout << "\033["+color+";33;1m" + "  O  " + "\033[0m";
                 }
             } else {
-                cout << "\033["+color+";30;1m" + "     " + "\033[0m";
+                cout << "\033["+color+";33;1m" + "     " + "\033[0m";
             }
             background = !background;
         }
@@ -252,9 +254,14 @@ pair<vector<vector<Coord> *> *, bool> StateModel::getValidMovesForCoord(bool cur
                             }
 
                             unordered_map<Coord, int, pair_hash> newOtherMapper = otherMapper;
+                            unordered_map<Coord, int, pair_hash> newMyMapper = myMapper;
                             newOtherMapper.erase(possibility);
                             Coord startCoord = make_pair(coord.first, coord.second);
                             Coord endCoord = make_pair(newCoord.first, newCoord.second);
+                            newMyMapper.erase(startCoord);
+                            if (currentTurn and endCoord.second == 7) newMyMapper[endCoord] = 1;
+                            else if (!currentTurn and endCoord.second == 0) newMyMapper[endCoord] = 1;
+                            else newMyMapper[endCoord] = king;
                             vector<Coord> *currentMove = new vector<Coord>;
                             currentMove->push_back(startCoord);
                             currentMove->push_back(endCoord);
@@ -262,7 +269,7 @@ pair<vector<vector<Coord> *> *, bool> StateModel::getValidMovesForCoord(bool cur
                             vector<vector<Coord> *> *newMoves = this->getValidMovesAfterJump(currentTurn,
                                                                                              newCoord,
                                                                                              king,
-                                                                                             myMapper,
+                                                                                             newMyMapper,
                                                                                              newOtherMapper);
                             if (newMoves->size() == 0) {
                                 validMoves->push_back(currentMove);
@@ -333,9 +340,14 @@ vector<vector<Coord> *> *StateModel::getValidMovesAfterJump(bool currentTurn, co
                     auto o_got = otherMapper.find(newCoord);
                     if (m_got == myMapper.end() && o_got == otherMapper.end()) {
                         unordered_map<Coord, int, pair_hash> newOtherMapper = otherMapper;
+                        unordered_map<Coord, int, pair_hash> newMyMapper = myMapper;
                         newOtherMapper.erase(possibility);
                         Coord startCoord = make_pair(coord.first, coord.second);
                         Coord endCoord = make_pair(newCoord.first, newCoord.second);
+                        newMyMapper.erase(startCoord);
+                        if (currentTurn and endCoord.second == 7) newMyMapper[endCoord] = 1;
+                        else if (!currentTurn and endCoord.second == 0) newMyMapper[endCoord] = 1;
+                        else newMyMapper[endCoord] = king;
                         vector<Coord> *currentMove = new vector<Coord>;
                         currentMove->push_back(startCoord);
                         currentMove->push_back(endCoord);
@@ -343,7 +355,7 @@ vector<vector<Coord> *> *StateModel::getValidMovesAfterJump(bool currentTurn, co
                         vector<vector<Coord> *> *newMoves = this->getValidMovesAfterJump(currentTurn,
                                                                                          newCoord,
                                                                                          king,
-                                                                                         myMapper,
+                                                                                         newMyMapper,
                                                                                          newOtherMapper);
                         if (newMoves->size() == 0) {
                             validMoves->push_back(currentMove);
@@ -384,7 +396,7 @@ void StateModel::startGame() {
             this->turnStyles[1] = "computer";
             this->turnStyles[0] = "computer";
     }
-    this->currentTurn = false;
+    this->currentTurn = true;
     while (!this->gameIsFinished) {
         this->executeTurn();
     }
@@ -412,10 +424,6 @@ void StateModel::executeTurn() {
         delete validMoves;
         return;
     }
-
-    // for (vector<Coord> *move : *validMoves) {
-    //     this->displayMove(move);
-    // }
 
     if (this->turnStyles[this->currentTurn] == "player") {
         vector<Coord> *move = this->handlePlayerTurn(validMoves);
@@ -537,12 +545,12 @@ void StateModel::executeMove(bool currentTurn, vector<Coord> *move, unordered_ma
     }
 }
 
-vector<Coord> *StateModel::alphaBetaSearch(bool currentTurn, unordered_map<Coord, int, pair_hash> &myMapper,
+pair<int, vector<Coord> *>StateModel::alphaBetaSearch(bool currentTurn, unordered_map<Coord, int, pair_hash> &myMapper,
                                            unordered_map<Coord, int, pair_hash> &otherMapper,
                                            int depthLimit, bool debug, chrono::system_clock::time_point &endTime) {
     //cout << "ALPHABETA: " << depthLimit << endl;
     return this->maxValue(currentTurn, myMapper, otherMapper, INT_MIN, INT_MAX, 
-                          1, depthLimit, NULL, debug, endTime).second;
+                          1, depthLimit, NULL, debug, endTime);
 }
 
 pair<int, vector<Coord> *>StateModel::maxValue(bool currentTurn, unordered_map<Coord, int, pair_hash> &myMapper,
@@ -645,9 +653,6 @@ pair<int, vector<Coord> *>StateModel::maxValue(bool currentTurn, unordered_map<C
         cout << "V: " << v+1 << "MAXMOVE: ";
         if (returnMove != NULL) this->displayMoveInline(returnMove);
         cout << endl;
-    }
-    if (currdepth == 1) {
-        cout << "V: " << v << endl;
     }
 
     return make_pair(v, returnMove);
@@ -790,19 +795,7 @@ int StateModel::evaluateBoard(bool currentTurn,
 
     int multiplierCoefficient = 150;
 
-    // for (pair<const Coord, int> &piece : redMapper) {
-    //     if (piece.second == 0) {
-    //         redScore += pawnScore;
-    //     } else redScore += kingScore;
-    // }
-
-    // for (pair<const Coord, int> &piece : yellowMapper) {
-    //     if (piece.second == 0) {
-    //         yellowScore += pawnScore;
-    //     } else yellowScore += kingScore;
-    // }
-
-    if (redMapper.size() + yellowMapper.size() < 7) {
+    if (redMapper.size() + yellowMapper.size() < 9) {
         pawnScore = 600;
         kingScore = 1100;
         centerScore = 200;
@@ -912,9 +905,6 @@ int StateModel::evaluateBoard(bool currentTurn,
 
     if (fromMax) return ((myScore - otherScore) << 5) + (rand() % 8);
     else return ((otherScore - myScore) << 5) + (rand() % 8);
-
-    // if (fromMax) return (myScore - otherScore);
-    // else return (otherScore - myScore);
 }
 
 vector<Coord> *StateModel::findBestMove() {
@@ -930,45 +920,18 @@ vector<Coord> *StateModel::findBestMove() {
     auto endTime = startTime + chrono::seconds(this->timeLimit) - chrono::milliseconds(int(double(this->timeLimit)*0.06));
 
     do {
-        move = this->alphaBetaSearch(this->currentTurn, myMapper, otherMapper, depthLimit, false, endTime);
-        if (move != NULL) {
+        pair<int, vector<Coord> *> alphaBetaValue = this->alphaBetaSearch(this->currentTurn, myMapper, otherMapper, depthLimit, false, endTime);
+        if (alphaBetaValue.second != NULL) {
+            move = alphaBetaValue.second;
             delete returnMove;
-            returnMove = move;
-            elapsed_seconds = chrono::system_clock::now() - startTime;
+            returnMove = alphaBetaValue.second;
         }
         depthLimit += 1;
+        elapsed_seconds = chrono::system_clock::now() - startTime;
+        if (alphaBetaValue.first > INT_MAX - 500000) break;
+        else if (alphaBetaValue.first < INT_MIN + 500000) break;
     } while (move != NULL);
 
-    cout << "Time Used: " << elapsed_seconds.count() << "\tDepth reached: " << depthLimit - 1 << endl;
+    cout << "Time Used: " << fixed << setprecision(3) << elapsed_seconds.count() << "\tDepth reached: " << depthLimit - 1 << endl;
     return returnMove;
-    
-    // move = this->alphaBetaSearch(this->currentTurn, myMapper, otherMapper, 10, false);
-    // elapsed_seconds = chrono::system_clock::now() - startTime;
-    // cout << "Time Used: " << elapsed_seconds.count() << endl;
-    // return move;
-
-    // try {
-    //     setitimer(ITIMER_VIRTUAL, &timer, &old_value);
-    //     cout << "setting timer" << endl;
-    //     while (true) {
-    //         cout << "HERE" << endl;
-    //         vector<Coord> *oldMove = move;
-    //         move = this->alphaBetaSearch(this->currentTurn, myMapper, otherMapper, depthLimit, false);
-    //         if (move == NULL) {
-    //             cout << "HERE's the error" << endl;
-    //         }
-    //         this->displayMove(move);
-    //         delete oldMove;
-    //         elapsed_seconds = chrono::system_clock::now() - startTime;
-    //         depthLimit += 1;
-    //     }
-    // } catch (int param) {
-    //     sigprocmask(SIG_UNBLOCK, &sig, NULL);
-    //     //setitimer(ITIMER_REAL, &end_timer, &old_value);
-    //     cout << "Caught" << endl;
-    //     if (move != NULL) {
-    //         cout << "Depth: " << depthLimit - 1 << " Time Used: " << elapsed_seconds.count() << endl;
-    //         return move;
-    //     }
-    // }
 }
